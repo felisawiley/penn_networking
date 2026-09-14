@@ -1,0 +1,15 @@
+{
+  // Files to lint.
+  "globs": ["**/*.md"],
+  // Directories/files to skip.
+  "ignores": ["node_modules/**"],
+  // Lenient rules suited to hand-written briefing notes.
+  "config": {
+    "default": true,
+    "MD013": false, // line-length: briefings contain long prose lines
+    "MD024": false, // duplicate headings: slot headings repeat across files
+    "MD033": false, // inline HTML: allowed
+    "MD041": false, // first-line heading is enforced by tools/briefings.py
+    "MD012": { "maximum": 2 }
+  }
+}
