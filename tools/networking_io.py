@@ -25,6 +25,9 @@ Usage (the automation calls these via the shell):
   python tools/networking_io.py append-rows --tab outreach_log --rows-json '[[...]]' --commit
   python tools/networking_io.py send-briefing --date 2026-09-14 --body-file brief.md --commit
 
+``send-briefing`` converts the Markdown archive into Gmail-safe HTML (is_html=True).
+The GitHub briefing file stays Markdown.
+
 Every command prints JSON to stdout. Write/send commands are DRY-RUN unless
 ``--commit`` is passed, so the automation can preview before mutating anything.
 """
@@ -36,6 +39,11 @@ import json
 import os
 import sys
 from typing import Any
+
+if __package__:
+    from .email_format import markdown_to_email_html
+else:  # python tools/networking_io.py
+    from email_format import markdown_to_email_html
 
 # The tracker is the source of truth. These identifiers were confirmed live.
 SPREADSHEET_ID = "1fNhbKbk5Y19RMOR2rr760Uw483mHPG3wVtan6mVosrg"
@@ -170,7 +178,12 @@ def append_rows(tab: str, rows: list[list[Any]], client=None, user_id: str | Non
 def send_briefing(subject: str, body: str, client=None, user_id: str | None = None) -> dict[str, Any]:
     return execute(
         "GMAIL_SEND_EMAIL",
-        {"recipient_email": BRIEFING_TO, "subject": subject, "body": body},
+        {
+            "recipient_email": BRIEFING_TO,
+            "subject": subject,
+            "body": markdown_to_email_html(body),
+            "is_html": True,
+        },
         client=client,
         user_id=user_id,
         connected_account_id=_gmail_account(),
@@ -273,8 +286,16 @@ def cmd_append_rows(args) -> int:
 def cmd_send_briefing(args) -> int:
     body = sys.stdin.read() if args.body_file == "-" else open(args.body_file, encoding="utf-8").read()
     subject = f"Weekly Networking \u2013 {args.date}"
+    html = markdown_to_email_html(body)
     if not args.commit:
-        _print({"dry_run": True, "to": BRIEFING_TO, "subject": subject, "body_preview": body[:500]})
+        _print({
+            "dry_run": True,
+            "to": BRIEFING_TO,
+            "subject": subject,
+            "is_html": True,
+            "body_preview": body[:500],
+            "html_preview": html[:800],
+        })
         return 0
     _print(send_briefing(subject, body, user_id=args.user_id))
     return 0
