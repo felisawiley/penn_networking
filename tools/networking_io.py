@@ -76,17 +76,8 @@ def get_client():
     return Composio(api_key=api_key)
 
 
-def execute(slug: str, arguments: dict[str, Any], *, client=None, user_id: str | None = None) -> dict[str, Any]:
-    """Execute a single Composio tool and return its raw response as a dict."""
-    client = client or get_client()
-    user_id = user_id or _require_env("COMPOSIO_USER_ID")
-    result = client.tools.execute(
-        slug,
-        arguments=arguments,
-        user_id=user_id,
-        dangerously_skip_version_check=True,
-    )
-    # The SDK returns a typed object or a dict depending on version; normalize.
+def _normalize(result: Any) -> dict[str, Any]:
+    """Normalize an SDK response object (or dict) to a plain dict."""
     if isinstance(result, dict):
         return result
     for attr in ("model_dump", "dict", "to_dict"):
@@ -96,7 +87,50 @@ def execute(slug: str, arguments: dict[str, Any], *, client=None, user_id: str |
     return {"data": getattr(result, "data", result), "successful": getattr(result, "successful", True)}
 
 
+def execute(
+    slug: str,
+    arguments: dict[str, Any],
+    *,
+    client=None,
+    user_id: str | None = None,
+    connected_account_id: str | None = None,
+) -> dict[str, Any]:
+    """Execute a single Composio tool. Auth by connected_account_id or user_id.
+
+    connected_account_id (or the per-toolkit *_ACCOUNT_ID env vars) targets one
+    exact account and needs no user id. Otherwise a user id is required (arg or
+    COMPOSIO_USER_ID). Run ``list-connections`` to discover either value.
+    """
+    client = client or get_client()
+    kwargs: dict[str, Any] = {"arguments": arguments, "dangerously_skip_version_check": True}
+    if connected_account_id:
+        kwargs["connected_account_id"] = connected_account_id
+    else:
+        uid = user_id or os.environ.get("COMPOSIO_USER_ID")
+        if not uid:
+            raise ConfigError(
+                "Set COMPOSIO_USER_ID (or a per-toolkit *_ACCOUNT_ID). "
+                "Run 'python tools/networking_io.py list-connections' to find it."
+            )
+        kwargs["user_id"] = uid
+    return _normalize(client.tools.execute(slug, **kwargs))
+
+
+def list_connections(client=None) -> dict[str, Any]:
+    """List Composio connected accounts (to discover user_id / account ids)."""
+    client = client or get_client()
+    return _normalize(client.connected_accounts.list())
+
+
 # --- Sheet helpers ---------------------------------------------------------
+
+def _sheets_account() -> str | None:
+    return os.environ.get("COMPOSIO_SHEETS_ACCOUNT_ID")
+
+
+def _gmail_account() -> str | None:
+    return os.environ.get("COMPOSIO_GMAIL_ACCOUNT_ID")
+
 
 def read_sheet(client=None, user_id: str | None = None) -> dict[str, Any]:
     return execute(
@@ -104,6 +138,7 @@ def read_sheet(client=None, user_id: str | None = None) -> dict[str, Any]:
         {"spreadsheet_id": SPREADSHEET_ID, "ranges": [f"{a1_tab(MAIN_TAB)}!A1:I1000"]},
         client=client,
         user_id=user_id,
+        connected_account_id=_sheets_account(),
     )
 
 
@@ -113,6 +148,7 @@ def read_log(client=None, user_id: str | None = None) -> dict[str, Any]:
         {"spreadsheet_id": SPREADSHEET_ID, "ranges": [f"{a1_tab(LOG_TAB)}!A1:H1000"]},
         client=client,
         user_id=user_id,
+        connected_account_id=_sheets_account(),
     )
 
 
@@ -127,6 +163,7 @@ def append_rows(tab: str, rows: list[list[Any]], client=None, user_id: str | Non
         },
         client=client,
         user_id=user_id,
+        connected_account_id=_sheets_account(),
     )
 
 
@@ -136,6 +173,7 @@ def send_briefing(subject: str, body: str, client=None, user_id: str | None = No
         {"recipient_email": BRIEFING_TO, "subject": subject, "body": body},
         client=client,
         user_id=user_id,
+        connected_account_id=_gmail_account(),
     )
 
 
@@ -148,18 +186,26 @@ def _print(obj: Any) -> None:
 
 def cmd_self_check(args) -> int:
     report: dict[str, Any] = {"checks": []}
-    for name in ("COMPOSIO_API_KEY", "COMPOSIO_USER_ID"):
-        report["checks"].append({"env": name, "present": bool(os.environ.get(name))})
-    if not all(c["present"] for c in report["checks"]):
+    api_present = bool(os.environ.get("COMPOSIO_API_KEY"))
+    identity_present = bool(
+        args.user_id
+        or os.environ.get("COMPOSIO_USER_ID")
+        or _sheets_account()
+        or _gmail_account()
+    )
+    report["checks"].append({"env": "COMPOSIO_API_KEY", "present": api_present})
+    report["checks"].append({"env": "COMPOSIO_USER_ID (or *_ACCOUNT_ID)", "present": identity_present})
+    if not api_present:
         report["ok"] = False
-        report["hint"] = "Add the missing secrets, then re-run self-check."
+        report["hint"] = "Add COMPOSIO_API_KEY as a secret, then re-run self-check."
         _print(report)
         return 1
+
     # Stage 1: project-key check that needs no connected account (per Composio's
     # unattended-agent guide). Isolates "bad/absent project key" from "app not
-    # connected".
+    # connected". A placeholder user_id is fine; this tool needs no account.
     try:
-        resp = execute("HACKERNEWS_GET_USER", {"username": "pg"}, user_id=args.user_id)
+        resp = execute("HACKERNEWS_GET_USER", {"username": "pg"}, user_id=args.user_id or "self-check")
         report["project_key_ok"] = bool(resp.get("successful", True))
     except Exception as exc:  # noqa: BLE001 - surface any failure to the caller
         report["project_key_ok"] = False
@@ -168,9 +214,21 @@ def cmd_self_check(args) -> int:
         _print(report)
         return 1
 
+    if not identity_present:
+        report["ok"] = False
+        report["connected_account_ok"] = None
+        report["hint"] = "Project key works. Run 'list-connections' to find your user_id, then set COMPOSIO_USER_ID."
+        _print(report)
+        return 1
+
     # Stage 2: connected-account check against the real tracker.
     try:
-        resp = execute("GOOGLESHEETS_GET_SHEET_NAMES", {"spreadsheet_id": SPREADSHEET_ID}, user_id=args.user_id)
+        resp = execute(
+            "GOOGLESHEETS_GET_SHEET_NAMES",
+            {"spreadsheet_id": SPREADSHEET_ID},
+            user_id=args.user_id,
+            connected_account_id=_sheets_account(),
+        )
         report["sheet_access"] = resp.get("data", resp)
         report["connected_account_ok"] = bool(resp.get("successful", True))
     except Exception as exc:  # noqa: BLE001 - surface any failure to the caller
@@ -180,6 +238,11 @@ def cmd_self_check(args) -> int:
     report["ok"] = bool(report.get("project_key_ok") and report.get("connected_account_ok"))
     _print(report)
     return 0 if report["ok"] else 1
+
+
+def cmd_list_connections(args) -> int:
+    _print(list_connections())
+    return 0
 
 
 def cmd_read_sheet(args) -> int:
@@ -224,6 +287,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("self-check", help="Verify secrets and live sheet access").set_defaults(func=cmd_self_check)
+    sub.add_parser("list-connections", help="List Composio connected accounts (find user_id / account ids)").set_defaults(func=cmd_list_connections)
     sub.add_parser("read-sheet", help="Read the main tracker tab").set_defaults(func=cmd_read_sheet)
     sub.add_parser("read-log", help="Read the outreach_log tab").set_defaults(func=cmd_read_log)
 

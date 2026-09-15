@@ -20,15 +20,8 @@ class FakeTools:
         self._response = response
         self.calls = []
 
-    def execute(self, slug, arguments, user_id, dangerously_skip_version_check):
-        self.calls.append(
-            {
-                "slug": slug,
-                "arguments": arguments,
-                "user_id": user_id,
-                "skip_version": dangerously_skip_version_check,
-            }
-        )
+    def execute(self, slug, **kwargs):
+        self.calls.append({"slug": slug, **kwargs})
         return self._response
 
 
@@ -50,7 +43,30 @@ def test_execute_passes_expected_params_and_normalizes_dict():
     assert call["slug"] == "SLUG"
     assert call["arguments"] == {"a": 1}
     assert call["user_id"] == "u1"
-    assert call["skip_version"] is True
+    assert call["dangerously_skip_version_check"] is True
+    assert "connected_account_id" not in call
+
+
+def test_execute_prefers_connected_account_id_over_user_id():
+    client = FakeClient({"successful": True})
+    nio.execute("SLUG", {}, client=client, user_id="u1", connected_account_id="acc_123")
+    call = client.tools.calls[0]
+    assert call["connected_account_id"] == "acc_123"
+    assert "user_id" not in call
+
+
+def test_execute_reads_user_id_from_env(monkeypatch):
+    monkeypatch.setenv("COMPOSIO_USER_ID", "env_user")
+    client = FakeClient({"successful": True})
+    nio.execute("SLUG", {}, client=client)
+    assert client.tools.calls[0]["user_id"] == "env_user"
+
+
+def test_execute_requires_identity(monkeypatch):
+    monkeypatch.delenv("COMPOSIO_USER_ID", raising=False)
+    client = FakeClient({"successful": True})
+    with pytest.raises(nio.ConfigError):
+        nio.execute("SLUG", {}, client=client)
 
 
 def test_execute_normalizes_object_with_model_dump():

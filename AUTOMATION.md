@@ -48,23 +48,34 @@ runtime access to Composio — that is what the key + this script provide.
 
 ### One‑time setup (the only hands‑on step)
 
-Add these as Cursor secrets (personal or repo scope) so they are injected into
-the automation VM:
+You only have to supply one secret; the rest is discoverable.
 
-| Secret | Where to get it |
-| --- | --- |
-| `COMPOSIO_API_KEY` | dashboard.composio.dev → the project that owns your Gmail/Sheets connections → API key |
-| `COMPOSIO_USER_ID` | the Composio user id that owns those connections |
+1. Add `COMPOSIO_API_KEY` as a Cursor secret (personal or repo scope) so it is
+   injected into the automation VM. Get it from dashboard.composio.dev →
+   Settings → Sessions & API Key (the project that owns your Gmail/Sheets
+   connections).
+2. Discover the identity to run tools as:
 
-Then verify from any run:
+   ```bash
+   python tools/networking_io.py list-connections
+   ```
 
-```bash
-python tools/networking_io.py self-check
-```
+   Note the `user_id` (and/or the `gmail` / `googlesheets` connected‑account
+   ids) for the felisawiley@gmail.com accounts.
+3. Add one of the following as a secret:
+   - `COMPOSIO_USER_ID` — the user id from step 2 (simplest), **or**
+   - `COMPOSIO_GMAIL_ACCOUNT_ID` + `COMPOSIO_SHEETS_ACCOUNT_ID` — the exact
+     connected‑account ids (use these to target specific accounts).
+4. Verify:
 
-A healthy result returns `"ok": true`, with `project_key_ok` (key valid) and
-`connected_account_ok` (Google connection reachable) both true plus the tracker's
-sheet names.
+   ```bash
+   python tools/networking_io.py self-check
+   ```
+
+   A healthy result returns `"ok": true`, with `project_key_ok` (key valid) and
+   `connected_account_ok` (Google connection reachable) both true plus the
+   tracker's sheet names. If only `project_key_ok` is true, the key works but the
+   identity is wrong — re‑check step 2/3.
 
 ## Automation prompt (MCP‑free)
 
