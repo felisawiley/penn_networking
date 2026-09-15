@@ -2,7 +2,7 @@
   // Files to lint.
   "globs": ["**/*.md"],
   // Directories/files to skip.
-  "ignores": ["node_modules/**"],
+  "ignores": ["node_modules/**", ".agents/**"],
   // Lenient rules suited to hand-written briefing notes.
   "config": {
     "default": true,

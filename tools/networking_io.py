@@ -155,19 +155,31 @@ def cmd_self_check(args) -> int:
         report["hint"] = "Add the missing secrets, then re-run self-check."
         _print(report)
         return 1
+    # Stage 1: project-key check that needs no connected account (per Composio's
+    # unattended-agent guide). Isolates "bad/absent project key" from "app not
+    # connected".
     try:
-        resp = execute(
-            "GOOGLESHEETS_GET_SHEET_NAMES",
-            {"spreadsheet_id": SPREADSHEET_ID},
-            user_id=args.user_id,
-        )
-        report["sheet_access"] = resp.get("data", resp)
-        report["ok"] = bool(resp.get("successful", True))
+        resp = execute("HACKERNEWS_GET_USER", {"username": "pg"}, user_id=args.user_id)
+        report["project_key_ok"] = bool(resp.get("successful", True))
     except Exception as exc:  # noqa: BLE001 - surface any failure to the caller
+        report["project_key_ok"] = False
+        report["project_key_error"] = str(exc)
         report["ok"] = False
-        report["error"] = str(exc)
+        _print(report)
+        return 1
+
+    # Stage 2: connected-account check against the real tracker.
+    try:
+        resp = execute("GOOGLESHEETS_GET_SHEET_NAMES", {"spreadsheet_id": SPREADSHEET_ID}, user_id=args.user_id)
+        report["sheet_access"] = resp.get("data", resp)
+        report["connected_account_ok"] = bool(resp.get("successful", True))
+    except Exception as exc:  # noqa: BLE001 - surface any failure to the caller
+        report["connected_account_ok"] = False
+        report["connected_account_error"] = str(exc)
+
+    report["ok"] = bool(report.get("project_key_ok") and report.get("connected_account_ok"))
     _print(report)
-    return 0 if report.get("ok") else 1
+    return 0 if report["ok"] else 1
 
 
 def cmd_read_sheet(args) -> int:

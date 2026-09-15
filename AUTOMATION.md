@@ -26,7 +26,25 @@ for cloud‑agent MCP). See `docs/cursor-mcp-bug-report.md`.
 Environment secrets *are* injected into automation VMs as environment variables,
 even though MCP servers are not. So the automation performs all Google Sheets /
 Gmail I/O through `tools/networking_io.py`, which authenticates with a single
-Composio API key. No MCP attachment required.
+Composio **project** API key and executes tools directly (Composio's documented
+unattended‑agent path). No MCP attachment required.
+
+This matches Composio's own guidance for automations:
+<https://docs.composio.dev/docs/agent-setup/unattended-authentication>. The
+programmatic path uses a project key (`COMPOSIO_API_KEY` / REST `x-api-key`
+against `POST /api/v3.1/tools/execute/{slug}`) plus the `user_id` that owns the
+Google connections. Two gotchas the docs call out:
+
+- The `ck_...` consumer key + `x-consumer-api-key` header is only for interactive
+  MCP clients (Claude Desktop, Cursor, etc.), **not** scripts. Scripts use the
+  project key.
+- `composio login --agent` creates a *separate* agent account that cannot access
+  your Gmail/Sheets. Use **your** project key and user id, not an agent account.
+
+The Composio agent skill is installed in the repo at `.agents/skills/composio/`
+(via `npx skills add ComposioHQ/composio --skill composio`) as guidance; note a
+skill is documentation only and does **not** by itself give a scheduled run
+runtime access to Composio — that is what the key + this script provide.
 
 ### One‑time setup (the only hands‑on step)
 
@@ -35,8 +53,8 @@ the automation VM:
 
 | Secret | Where to get it |
 | --- | --- |
-| `COMPOSIO_API_KEY` | dashboard.composio.dev → Settings → API Keys |
-| `COMPOSIO_USER_ID` | the Composio user/entity id that owns the Google + Gmail connections |
+| `COMPOSIO_API_KEY` | dashboard.composio.dev → the project that owns your Gmail/Sheets connections → API key |
+| `COMPOSIO_USER_ID` | the Composio user id that owns those connections |
 
 Then verify from any run:
 
@@ -44,7 +62,9 @@ Then verify from any run:
 python tools/networking_io.py self-check
 ```
 
-A healthy result returns `"ok": true` and the tracker's sheet names.
+A healthy result returns `"ok": true`, with `project_key_ok` (key valid) and
+`connected_account_ok` (Google connection reachable) both true plus the tracker's
+sheet names.
 
 ## Automation prompt (MCP‑free)
 
