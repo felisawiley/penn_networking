@@ -29,3 +29,18 @@ npm run index                # print a Markdown index of all briefings
 ```
 
 The CLI can also be run directly, e.g. `python3 tools/briefings.py validate`.
+
+### The weekly automation
+
+The Monday briefing is produced by a Cursor automation. Because Cursor Cloud
+Agent automations do not reliably receive MCP servers, the automation does its
+Google Sheets / Gmail I/O through `tools/networking_io.py` using a single
+`COMPOSIO_API_KEY` secret instead of MCP. See `AUTOMATION.md` for setup and the
+MCP‑free prompt, `docs/weekly-networking-rules.md` for the original rules, and
+`docs/cursor-mcp-bug-report.md` for the underlying Cursor bug.
+
+```bash
+pip install -r requirements.txt
+python tools/networking_io.py self-check   # verify secrets + live sheet access
+python -m pytest tests/ -q                  # run the test suite
+```

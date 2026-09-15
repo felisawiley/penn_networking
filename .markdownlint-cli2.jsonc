@@ -10,6 +10,7 @@
     "MD024": false, // duplicate headings: slot headings repeat across files
     "MD033": false, // inline HTML: allowed
     "MD041": false, // first-line heading is enforced by tools/briefings.py
+    "MD034": false, // email addresses appear in prose and verbatim quotes
     "MD012": { "maximum": 2 }
   }
 }

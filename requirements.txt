@@ -1,0 +1,7 @@
+# Python dependencies for the Weekly Networking automation's MCP-independent I/O.
+# composio provides direct tool execution (Google Sheets / Gmail / GitHub) using
+# a COMPOSIO_API_KEY, so the automation does not depend on Cursor's MCP layer.
+composio>=0.9.0
+
+# Test-only
+pytest>=8.0.0
