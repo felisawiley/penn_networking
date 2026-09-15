@@ -101,6 +101,8 @@ Use this as the automation's instructions. It is the original logic with every
 >   last_featured_reason: `python tools/networking_io.py append-rows --tab '26' --rows-json '[...]' --commit`
 >   (omit `--commit` first to preview).
 > - Email Fee the briefing: `python tools/networking_io.py send-briefing --date YYYY-MM-DD --body-file brief.md --commit`.
+>   The command converts the Markdown archive to Gmail-safe HTML (`is_html=True`);
+>   do not paste raw Markdown into the message body.
 >
 > SOURCE OF TRUTH: the Google Sheet (`1fNhbKbk5Y19RMOR2rr760Uw483mHPG3wVtan6mVosrg`,
 > main tab `'26`, log tab `outreach_log`). Columns on the main tab: Date, Name,
