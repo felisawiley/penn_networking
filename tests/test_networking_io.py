@@ -121,6 +121,26 @@ def test_send_briefing_dry_run(tmp_path, capsys):
     assert payload["dry_run"] is True
     assert payload["to"] == nio.BRIEFING_TO
     assert payload["subject"] == "Weekly Networking \u2013 2026-09-14"
+    assert payload["is_html"] is True
+    assert "<h1" in payload["html_preview"]
+    assert "##" not in payload["html_preview"]
+
+
+def test_send_briefing_uses_html_body():
+    client = FakeClient({"successful": True, "data": {"id": "x"}})
+    nio.send_briefing(
+        "Weekly Networking \u2013 2026-09-14",
+        "# Hello\n\n## Section\n\n1. Ada Lovelace — founder\n   Draft: \"Hi Ada\"\n",
+        client=client,
+        user_id="u1",
+    )
+    args = client.tools.calls[0]["arguments"]
+    assert args["is_html"] is True
+    assert args["recipient_email"] == nio.BRIEFING_TO
+    assert "<h1" in args["body"]
+    assert "<h2" in args["body"]
+    assert "## Section" not in args["body"]
+    assert "<strong>Ada Lovelace</strong>" in args["body"]
 
 
 def test_self_check_missing_secrets_returns_1(monkeypatch, capsys):
