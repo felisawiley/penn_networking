@@ -1,5 +1,23 @@
 # Weekly Networking automation
 
+**Stop reconnecting MCP.** That loop cannot fix this automation.
+
+Composio / Gmail / Google Sheets MCP OAuth, Desktop “Connect”, and Automations
+Tools reconnects do **not** put `COMPOSIO_API_KEY` or `COMPOSIO_USER_ID` into
+the scheduled VM. Cursor’s HTTP MCP keeps those credentials on its proxy; this
+automation’s tool catalog only includes `open_git_pr`. The weekly job talks to
+Gmail and Sheets through `python tools/networking_io.py`, which reads **process
+environment variables** injected from Cloud Agent **environment secrets**.
+
+| Place you already authorized | Does this VM see it? |
+|---|---|
+| Cursor Desktop MCP / Automations MCP reconnect | No |
+| Composio dashboard OAuth for Gmail/Sheets | Needed, but not sufficient |
+| Cloud Agent Secrets named `COMPOSIO_API_KEY` + `COMPOSIO_USER_ID` on **this** environment (`feaefef9-b058-11f1-bf4b-42ffb4d10ea7`) | **Yes** — this is the only path |
+
+Secrets are injected at VM **start**. Adding them to a running agent does nothing;
+the next Monday cron (or a new Cloud Agent) is required after they are saved.
+
 This document defines the Weekly Networking automation and — importantly — makes
 it independent of Cursor's MCP layer, which does not reliably reach Cloud Agent
 automation runs.

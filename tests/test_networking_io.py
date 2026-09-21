@@ -130,6 +130,9 @@ def test_self_check_missing_secrets_returns_1(monkeypatch, capsys):
     assert rc == 1
     assert payload["ok"] is False
     assert any(c["env"] == "COMPOSIO_API_KEY" and not c["present"] for c in payload["checks"])
+    hint = payload.get("hint", "")
+    assert "COMPOSIO_API_KEY is not in this process environment" in hint
+    assert "MCP" in hint
 
 
 def test_config_error_surfaced_as_rc2(monkeypatch, capsys):

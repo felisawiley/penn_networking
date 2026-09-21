@@ -197,7 +197,16 @@ def cmd_self_check(args) -> int:
     report["checks"].append({"env": "COMPOSIO_USER_ID (or *_ACCOUNT_ID)", "present": identity_present})
     if not api_present:
         report["ok"] = False
-        report["hint"] = "Add COMPOSIO_API_KEY as a secret, then re-run self-check."
+        report["hint"] = (
+            "COMPOSIO_API_KEY is not in this process environment. "
+            "Authorizing or reconnecting Composio/Gmail MCP does not set it: "
+            "HTTP MCP credentials stay on Cursor's proxy and never enter the VM, "
+            "and this automation's tool catalog does not include Composio. "
+            "Add a Cloud Agent environment secret named exactly COMPOSIO_API_KEY "
+            "(Composio project API key, not the ck_ consumer key), plus "
+            "COMPOSIO_USER_ID, on this environment — then start a new run "
+            "(secrets do not hot-reload into an already-running VM)."
+        )
         _print(report)
         return 1
 
